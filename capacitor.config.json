@@ -1,5 +1,9 @@
 {
   "appId": "com.billyedwall.lilracer",
   "appName": "Lil' Racer",
-  "webDir": "web"
+  "webDir": "web",
+  "packageClassList": [],
+  "ios": {
+    "buildNumber": "2"
+  }
 }
