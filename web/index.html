@@ -1395,7 +1395,7 @@ if(masterVolSlider){ masterVolSlider.addEventListener('input', ()=>{
       state.sens = savedSens; sensSlider.value = String(savedSens); sensVal.textContent = savedSens.toFixed(1)+'×';
     }
     const savedSound = localStorage.getItem('kid_racer_sound');
-    if(savedSound==='on'){ state.soundOn = true; }
+    if(savedSound === null || savedSound === 'on'){ state.soundOn = true; }
   }catch(e){}
   // reflect sound button on load
   if(toggleSoundBtn){ toggleSoundBtn.textContent = `Sound: ${state.soundOn?'ON':'OFF'}`; }
@@ -3882,7 +3882,7 @@ if(!b.mesh.parent) scene.add(b.mesh);
 btnReset.onclick = () => { reset(); setPromptVisible(true); statusBox.textContent = 'idle'; };
   toggleAssistBtn.onclick = () => { state.laneAssist = !state.laneAssist; toggleAssistBtn.textContent = `Assist: ${state.laneAssist?'ON':'OFF'}`; };
   toggleBlocksBtn.onclick = () => { state.blocksOn = !state.blocksOn; toggleBlocksBtn.textContent = `Traffic: ${state.blocksOn?'ON':'OFF'}`; };
-  if(toggleSoundBtn){ toggleSoundBtn.onclick = () => { state.soundOn = !state.soundOn; if(toggleSoundBtn){ toggleSoundBtn.textContent = `Sound: ${state.soundOn?'ON':'OFF'}`; } setEngineEnabled(state.soundOn); try{ setAudioRunning(state.soundOn && running); }catch(e){} try{ localStorage.setItem('kid_racer_sound', state.soundOn?'on':'off'); }catch(e){} }; }
+
   // Sensitivity slider
   sensSlider.addEventListener('input', ()=>{
     state.sens = parseFloat(sensSlider.value) || 1;
@@ -3922,7 +3922,7 @@ if(masterVolSlider){ masterVolSlider.addEventListener('input', ()=>{
       state.sens = savedSens; sensSlider.value = String(savedSens); sensVal.textContent = savedSens.toFixed(1)+'×';
     }
     const savedSound = localStorage.getItem('kid_racer_sound');
-    if(savedSound==='on'){ state.soundOn = true; }
+    if(savedSound === null || savedSound === 'on'){ state.soundOn = true; }
   }catch(e){}
   // reflect sound button on load
   if(toggleSoundBtn){ toggleSoundBtn.textContent = `Sound: ${state.soundOn?'ON':'OFF'}`; }
