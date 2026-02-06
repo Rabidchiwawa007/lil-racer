@@ -30,6 +30,32 @@
     .titleRow { display:flex; justify-content:center; align-items: flex-start; }
     .titleCluster { position: relative; display: inline-block; }
     .titleCluster #legend { position:absolute; top:50%; transform: translateY(-50%); left: calc(100% + 16px); white-space: nowrap; }
+
+    /* Nudge pause menu upward by ~50px */
+    #bigPrompt .card { transform: translateY(-50px); }
+
+
+/* Show engine volume slider/value */
+#engVolSlider, #engVolVal { display: inline-block !important; visibility: visible !important; opacity: 1 !important; }
+
+/* Hide Engine Volume control (we force it in code now) */
+#engVolSlider,
+#engVolVal {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+/* Hide the entire "Eng Vol" pill container */
+label.pill:has(#engVolSlider) {
+  display: none !important;
+}
+
+#spaceTouchBtn{
+  display:none;
+}
+
+
 </style>
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js">// Global rainbow texture helper (safe, idempotent)
 if (!window.makeRainbowTexture) {
@@ -79,6 +105,24 @@ let engVolSlider = document.querySelector('#hudControls #engVolSlider');
 let engVolVal = document.querySelector('#hudControls #engVolVal');
 let masterVolSlider = document.querySelector('#hudControls #masterVolSlider');
 let masterVolVal = document.querySelector('#hudControls #masterVolVal');
+// --- Default slider handling for engine volume (50%) and steering (1.4) ---
+try {
+  const savedEngine = localStorage.getItem('kid_racer_engine_vol');
+  const savedSens = localStorage.getItem('kid_racer_sens');
+  if (!savedEngine) {
+    state.engineVol = 0.5;
+    if (engVolSlider) engVolSlider.value = '50';
+    if (engVolVal) engVolVal.textContent = '50%';
+  }
+  if (!savedSens) {
+    state.sens = 1.4;
+    if (sensSlider) sensSlider.value = '1.4';
+    if (sensVal) sensVal.textContent = '1.4×';
+  }
+} catch(e) { console.warn('default slider patch failed', e); }
+
+try{ if(engVolSlider) engVolSlider.style.display=''; if(engVolVal) engVolVal.style.display=''; }catch(e){}
+
   const gameEl = document.getElementById('game');
 
   // ---------- Error / Status UI ----------
@@ -1445,6 +1489,118 @@ function setPromptVisible(v){
   }
   reset();
 
+/* ================================
+   FORCE + LOCK ENGINE VOL = 18%
+   Paste right before: // ---------- Main Loop ----------
+================================ */
+(() => {
+  const FORCE_VOL = 0.18;
+  const FORCE_PCT_STR = "18";
+  const KEY = "kid_racer_engine_vol";
+
+  const slider = document.getElementById("engVolSlider");
+  const label  = document.getElementById("engVolVal");
+
+  // Set immediately
+  try { if (typeof state !== "undefined") state.engineVol = FORCE_VOL; } catch(e){}
+  if (slider) slider.value = FORCE_PCT_STR;
+  if (label)  label.textContent = FORCE_PCT_STR + "%";
+  try { localStorage.setItem(KEY, String(FORCE_VOL)); } catch(e){}
+
+  // LOCK state.engineVol so later assignments can't change it
+  try {
+    if (typeof state !== "undefined" && state && !state.__lockEngVol18) {
+      state.__lockEngVol18 = true;
+      Object.defineProperty(state, "engineVol", {
+        get() { return FORCE_VOL; },
+        set(_) { /* ignore */ },
+        configurable: true
+      });
+    }
+  } catch(e){}
+
+  // LOCK the slider's .value so later code can't change the UI
+  // (this beats duplicated "restore persisted settings" blocks)
+  try {
+    if (slider && !slider.__lockEngVol18) {
+      slider.__lockEngVol18 = true;
+
+      // Define an instance-level accessor that ignores all future sets
+      Object.defineProperty(slider, "value", {
+        get() { return FORCE_PCT_STR; },
+        set(_) { /* ignore */ },
+        configurable: true
+      });
+
+      // Also block any attribute-based overwrites
+      const _setAttr = slider.setAttribute.bind(slider);
+      slider.setAttribute = (name, value) => {
+        if (String(name).toLowerCase() === "value") return;
+        return _setAttr(name, value);
+      };
+
+      // Prevent user changes too (optional, but matches “force at all times”)
+      const stop = (e) => { e.preventDefault(); e.stopImmediatePropagation(); return false; };
+      slider.addEventListener("input", stop, true);
+      slider.addEventListener("change", stop, true);
+      slider.addEventListener("pointerdown", stop, true);
+      slider.addEventListener("mousedown", stop, true);
+      slider.addEventListener("touchstart", stop, true);
+      slider.addEventListener("keydown", stop, true);
+    }
+  } catch(e){}
+
+  // Keep label correct if later code changes it
+  try {
+    if (label && !label.__lockEngVol18) {
+      label.__lockEngVol18 = true;
+      const obs = new MutationObserver(() => {
+        if (label.textContent !== FORCE_PCT_STR + "%") label.textContent = FORCE_PCT_STR + "%";
+      });
+      obs.observe(label, { childList: true, characterData: true, subtree: true });
+      if (label.textContent !== FORCE_PCT_STR + "%") label.textContent = FORCE_PCT_STR + "%";
+    }
+  } catch(e){}
+
+  // Force storage reads/writes too (belt + suspenders)
+  try {
+    if (!Storage.prototype.__lockEngVol18) {
+      Storage.prototype.__lockEngVol18 = true;
+      const _get = Storage.prototype.getItem;
+      const _set = Storage.prototype.setItem;
+      Storage.prototype.getItem = function(k){ return (k === KEY) ? String(FORCE_VOL) : _get.call(this, k); };
+      Storage.prototype.setItem = function(k,v){ if (k === KEY) return; return _set.call(this, k, v); };
+    }
+  } catch(e){}
+})();
+
+/* FORCE ENGINE VOL = 18% (put above BOTH Main Loop sections) */
+(() => {
+  const FORCE_VOL = 0.18;
+  const FORCE_PCT = "18";
+  const KEY = "kid_racer_engine_vol";
+
+  // state
+  try { if (typeof state !== "undefined") state.engineVol = FORCE_VOL; } catch(e){}
+
+  // UI
+  try {
+    const s = document.getElementById("engVolSlider");
+    if (s) s.value = FORCE_PCT;
+    const v = document.getElementById("engVolVal");
+    if (v) v.textContent = FORCE_PCT + "%";
+  } catch(e){}
+
+  // audio (common names in your file)
+  try { if (typeof engineOutGain !== "undefined" && engineOutGain?.gain) engineOutGain.gain.value = FORCE_VOL; } catch(e){}
+  try { if (typeof engineGain    !== "undefined" && engineGain?.gain)    engineGain.gain.value = FORCE_VOL; } catch(e){}
+
+  // nuke persistence so restores can’t win
+  try { localStorage.setItem(KEY, String(FORCE_VOL)); } catch(e){}
+})();
+
+
+
   // ---------- Main Loop ----------
   function startGame(){
     if(started){ running = true; setPromptVisible(false); statusBox.textContent = 'running'; ensureEngineAudio(); setEngineEnabled(state.soundOn); try{ setAudioRunning(true); }catch(e){} requestAnimationFrame(animate); return; }
@@ -1764,7 +1920,7 @@ catch(e){}
 /* --- HUD Controls --- */
 #hudControls{
   position: fixed;
-  bottom: 10px;
+  bottom: 0px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -1925,7 +2081,7 @@ button{
 </style>
 <style>
 #legend{
-  transform: scale(0.65);
+  transform: scale(0.90);
   transform-origin: top left;
   position: absolute;
   display: none;
@@ -2002,6 +2158,23 @@ canvas{ width:100%!important; height:100%!important; display:block; }
   border-radius: 999px;        /* make sure it has a pill shape */
 }
 
+/* Remove the big glass background behind the control pills */
+#hudControls{
+  background: transparent !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Make bottom control panel match Start menu card */
+#hudControls{
+  background: rgba(0,0,0,0.35) !important;
+  backdrop-filter: blur(10px) !important;
+  border-radius: 18px !important;   /* ← key change from pill to rounded rectangle */
+  box-shadow: 0 10px 30px rgba(0,0,0,.35) !important;
+  padding: 12px 0px !important;
+}
+
 /* Sliders: center the pill itself and center contents inside */
 #hudControls label:has(#sensSlider),
 #hudControls label:has(#masterVolSlider){
@@ -2051,14 +2224,15 @@ canvas{ width:100%!important; height:100%!important; display:block; }
 }
 #cornerHUD .pill{ pointer-events: auto; }
 </style><style>
-/* Restore appearance of Best Minute & Speed pills */
 #cornerHUD .pill{
-  background: rgba(0,0,0,0.6);
+  background: rgba(0,0,0,0.35);
   color: white;
-  padding: 6px 12px;
-  border-radius: 999px;
+  padding: 8px 8px;
+  border-radius: 12px;              /* <-- key change */
   font-weight: 600;
-  box-shadow: 0 0 8px rgba(0,0,0,0.4);
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  backdrop-filter: blur(10px);
+}
 }
 #cornerHUD #timerPill{
   display: flex;
@@ -2070,6 +2244,8 @@ canvas{ width:100%!important; height:100%!important; display:block; }
 #cornerHUD #timerPill div{
   color: white;
 }
+
+
 #cornerHUD #spd{
   color: white;
 }
@@ -2151,18 +2327,125 @@ canvas{ width:100%!important; height:100%!important; display:block; }
 #legend {
   margin-top: 36px !important;
 }
-</style></head>
+</style>
+<style>
+/* OVERRIDE: Show the Engine Volume row (undo earlier hidden rule) */
+label:has(#engVolSlider) {
+  display: inline-flex !important;
+  visibility: visible !important;
+  align-items: center;
+  gap: 6px;
+}
+</style>
+
+
+<style>
+/* OVERRIDE 2: ensure the actual engine slider and value are visible */
+#engVolSlider, #engVolVal {
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+/* Give the engine slider the same width as others */
+label:has(#engVolSlider) input[type="range"] {
+  width: 180px !important;
+  flex: 0 1 55%;
+}
+</style>
+
+
+<style>
+/* Match engine volume slider width with other sliders */
+#engVolSlider {
+  width: 160px !important;
+}
+</style>
+
+
+<style>
+/* Align Eng Vol pill and slider with others */
+#hudControls label.pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+/* Apply same width/scale treatment to Eng Vol row as others */
+#hudControls label:has(#engVolSlider){
+  width: 90% !important;
+  transform: scale(0.935);
+  transform-origin: top center;
+  margin: 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+/* Ensure all three sliders use same track width */
+#hudControls label:has(input[type="range"]) input[type="range"]{
+  width: 160px !important;
+  flex: 0 1 55%;
+  vertical-align: middle;
+}
+/* Keep trailing value columns aligned */
+#hudControls #sensVal,
+#hudControls #engVolVal,
+#hudControls #masterVolVal {
+  min-width: 46px;
+  text-align: right;
+}
+</style>
+
+
+<style>
+/* Shrink the entire control pill cluster to 80% of current size */
+#hudControls {
+  transform: scale(0.8);
+  transform-origin: top center;
+}
+</style>
+
+
+<style>
+/* Re-center the controls pill while keeping 80% scale */
+#hudControls {
+  transform: translateX(-50%) scale(0.8) !important;
+  transform-origin: top center !important;
+}
+</style>
+
+
+<style>
+/* Nudge start/pause menu slightly higher (~12px) for better landscape balance */
+#bigPrompt .card {
+  margin-top: -12px !important;
+}
+</style>
+
+
+<style>
+/* Nudge start/pause menu another 12px higher (total ~24px) */
+#bigPrompt .card {
+  margin-top: -24px !important;
+}
+</style>
+
+
+<style>
+/* Nudge sliders pill down by 24px */
+#hudControls {
+  bottom: -24px !important;
+}
+</style>
+
+</head>
 <body>
 <div id="hudControls">
 <button id="toggleSound">Sound: OFF</button>
 <label class="pill">
     Steering
-    <input id="sensSlider" max="3" min="0.5" step="0.1" type="range" value="1"/>
+    <input id="sensSlider" max="5" min="0.5" step="0.1" type="range" value="1"/>
 <span id="sensVal">1.0×</span>
 </label>
-<label class="pill">
-    Engine Vol
-    <input id="engVolSlider" max="100" min="0" step="1" type="range" value="20"/>
+<label class="pill">Eng Vol<input id="engVolSlider" max="100" min="0" step="1" type="range" value="20"/>
 <span id="engVolVal">100%</span>
 </label>
 <label class="pill"> Volume <input id="masterVolSlider" max="100" min="1" step="1" type="range" value="100"/>
@@ -2201,7 +2484,7 @@ canvas{ width:100%!important; height:100%!important; display:block; }
 <button id="toggleSound">Sound: OFF</button>
 <label class="pill" style="display:flex; align-items: flex-start; gap:8px; background:rgba(0,0,0,.25); color:#fff; font-weight:700; padding:6px 12px; border-radius:999px;">
       Steering
-      <input id="sensSlider" max="3" min="0.5" step="0.1" style="accent-color:#2dd4bf; width:160px;" type="range" value="1"/>
+      <input id="sensSlider" max="5" min="0.5" step="0.1" style="accent-color:#2dd4bf; width:160px;" type="range" value="1"/>
 <span id="sensVal">1.0×</span>
 </label></div>
 </div>
@@ -2339,12 +2622,27 @@ let masterVolVal = document.querySelector('#hudControls #masterVolVal');
   window.addEventListener('unhandledrejection', (e)=>{ showErr(e.reason || 'Unhandled promise rejection'); });
 
   const statusBox = document.createElement('div');
-  Object.assign(statusBox.style, {position:'absolute',right:'8px',bottom:'8px',padding:'6px 8px',background:'rgba(0,0,0,0.45)',color:'#fff',borderRadius:'8px',font:'12px/1.2 system-ui',display:'block',zIndex:3});
+  Object.assign(statusBox.style, {position:'absolute',right:'8px',bottom:'8px',padding:'6px 8px',background:'rgba(0,0,0,0.45)',color:'#fff',borderRadius:'8px',font:'12px/1.2 system-ui',display:'none',zIndex:3});
   statusBox.textContent = 'idle';
   gameEl.appendChild(statusBox);
 
   // ---------- State ----------
   let spawnMiddleUntil = 0; // ms timestamp for rainbow effect window
+
+  // --- Pause-aware power-up timers (rainbow) ---
+  let _spawnRemain = 0;
+
+  function _freezePowerupTimers(now){
+    _spawnRemain = Math.max(0, spawnMiddleUntil - now);
+  }
+
+  function _restorePowerupTimers(now){
+    if(_spawnRemain > 0){
+      spawnMiddleUntil = now + _spawnRemain;
+      _spawnRemain = 0;
+    }
+  }
+
   let W = 0, H = 0, running = false, t0 = 0, started = false;
   const state = {
     score: 0,
@@ -3457,9 +3755,29 @@ if(!b.mesh.parent) scene.add(b.mesh);
     if(e.key==='ArrowUp') keys.up = true;
     if(e.key==='ArrowDown') keys.down = true;
     if(e.key===' '){
-      if(!started) { startGame(); }
-      else { running = !running;
-        try{ setAudioRunning(running); }catch(e){} setPromptVisible(!running); if(running){ requestAnimationFrame(animate); } }
+      if(!started) {
+        startGame();
+      }
+      else {
+        const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+
+
+        // If currently running, we are about to PAUSE → freeze rainbow timer
+        if(running){
+          _freezePowerupTimers(nowMs);
+        }
+        // If currently paused, we are about to RESUME → restore rainbow timer
+        else{
+          _restorePowerupTimers(nowMs);
+          t0 = nowMs; // prevent giant delta time jump after pause
+        }
+
+        running = !running;
+
+        try{ setAudioRunning(running); }catch(e){}
+        setPromptVisible(!running);
+        if(running){ requestAnimationFrame(animate); }
+      }
     }
   });
   addEventListener('keyup', e=>{
@@ -3470,7 +3788,15 @@ if(!b.mesh.parent) scene.add(b.mesh);
   });
 
   // ---------- UI buttons ----------
-  btnStart.onclick = () => { try { startGame(); } catch(e){ showErr(e); } };
+  btnStart.onclick = () => {
+    try { startGame(); } catch(e){ showErr(e); }
+
+    // show Pause button after first start
+    try {
+      var pauseBtn = document.getElementById('spaceTouchBtn');
+      if (pauseBtn) pauseBtn.style.display = 'block';
+    } catch(e){}
+  };
   
 /* --- Reset Best Minutes wiring --- */
 (function(){
@@ -3707,6 +4033,32 @@ function setPromptVisible(v){
   }
   reset();
 
+/* FORCE ENGINE VOL = 18% (put above BOTH Main Loop sections) */
+(() => {
+  const FORCE_VOL = 0.18;
+  const FORCE_PCT = "18";
+  const KEY = "kid_racer_engine_vol";
+
+  // state
+  try { if (typeof state !== "undefined") state.engineVol = FORCE_VOL; } catch(e){}
+
+  // UI
+  try {
+    const s = document.getElementById("engVolSlider");
+    if (s) s.value = FORCE_PCT;
+    const v = document.getElementById("engVolVal");
+    if (v) v.textContent = FORCE_PCT + "%";
+  } catch(e){}
+
+  // audio (common names in your file)
+  try { if (typeof engineOutGain !== "undefined" && engineOutGain?.gain) engineOutGain.gain.value = FORCE_VOL; } catch(e){}
+  try { if (typeof engineGain    !== "undefined" && engineGain?.gain)    engineGain.gain.value = FORCE_VOL; } catch(e){}
+
+  // nuke persistence so restores can’t win
+  try { localStorage.setItem(KEY, String(FORCE_VOL)); } catch(e){}
+})();
+
+
   // ---------- Main Loop ----------
   function startGame(){
     if(started){ running = true; setPromptVisible(false); statusBox.textContent = 'running'; ensureEngineAudio(); setEngineEnabled(state.soundOn); try{ setAudioRunning(true); }catch(e){} requestAnimationFrame(animate); return; }
@@ -3823,6 +4175,12 @@ if (typeof road !== 'undefined' && road && road.material) {
         if(engineOutGain){ engineOutGain.gain.setTargetAtTime((state.engineVol||1), t, 0.05); }
         if(masterOutGain){ const masterTarget = (running && wantAudio) ? (state.masterVol||1) : 0.0; masterOutGain.gain.setTargetAtTime(masterTarget, t, 0.02); }
       }catch(e){}
+    }
+
+    // Faster spring-back toward center when not steering
+    if(!keys.left && !keys.right){
+      const CENTER_PULL = 14; // try 12–20 (higher = faster snap)
+      player.userData.vx += (-player.position.x) * CENTER_PULL * dt;
     }
 
     player.userData.vx *= fric; player.position.x += player.userData.vx * dt;
@@ -3995,6 +4353,7 @@ const pts = BLOCK_COLORS[b.colorKey]?.pts || 1;
     requestAnimationFrame(animate);
   }
 
+  buildLegend();
   positionLegend();
   renderMinuteSnaps();
   // Start paused
