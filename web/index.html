@@ -57,7 +57,8 @@ label.pill:has(#engVolSlider) {
 
 
 </style>
-<script src="https://unpkg.com/three@0.160.0/build/three.min.js">// Global rainbow texture helper (safe, idempotent)
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script>
 if (!window.makeRainbowTexture) {
   window.makeRainbowTexture = (function(){
     let rainbowTexture = null;
@@ -83,6 +84,50 @@ if (!window.makeRainbowTexture) {
     };
   })();
 }
+
+// iOS / WebView audio unlock helper
+let __audioUnlocked = false;
+
+async function ensureAudioUnlocked() {
+  if (__audioUnlocked) return true;
+
+  // 1) Unlock WebAudio (best for synth/engine loops)
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) {
+      const ctx = new AC();
+      await ctx.resume();
+
+      // Play a tiny silent buffer (some WebViews require an actual play)
+      const buffer = ctx.createBuffer(1, 1, 22050);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // 2) Also unlock HTMLAudio (if you use <audio> tags anywhere)
+  try {
+    const a = new Audio();
+    a.src =
+      "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=";
+    await a.play();
+    a.pause();
+    a.currentTime = 0;
+  } catch (e) {
+    // ignore
+  }
+
+  __audioUnlocked = true;
+  return true;
+}
+
+// Try to unlock on the very first user gesture
+document.addEventListener("touchstart", ensureAudioUnlocked, { once: true, passive: true });
+document.addEventListener("mousedown", ensureAudioUnlocked, { once: true, passive: true });
 
 
 (() => {
@@ -1287,7 +1332,30 @@ btnReset.onclick = () => { reset(); setPromptVisible(true); statusBox.textConten
     }catch(e){}
   })();
 
-  if(toggleSoundBtn){ toggleSoundBtn.onclick = () => { state.soundOn = !state.soundOn; if(toggleSoundBtn){ toggleSoundBtn.textContent = `Sound: ${state.soundOn?'ON':'OFF'}`; } setEngineEnabled(state.soundOn); try{ setAudioRunning(state.soundOn && running); }catch(e){} try{ localStorage.setItem('kid_racer_sound', state.soundOn?'on':'off'); }catch(e){} }; }
+  if (toggleSoundBtn) {
+    toggleSoundBtn.onclick = async () => {
+      state.soundOn = !state.soundOn;
+      toggleSoundBtn.textContent = `Sound: ${state.soundOn ? 'ON' : 'OFF'}`;
+
+      if (state.soundOn) {
+        // 🔊 iOS requires audio unlock inside a user gesture
+        try { await ensureAudioUnlocked(); } catch(e) {}
+
+        // Create engine audio graph if not created yet
+        try { ensureEngineAudio(); } catch(e) {}
+
+        // Resume audio + start engine immediately
+        try { setEngineEnabled(true); } catch(e) {}
+        try { setAudioRunning(running); } catch(e) {}
+      } else {
+        try { setEngineEnabled(false); } catch(e) {}
+        try { setAudioRunning(false); } catch(e) {}
+      }
+
+      try { localStorage.setItem('kid_racer_sound', state.soundOn ? 'on' : 'off'); } catch(e) {}
+    };
+  }
+
   // Sensitivity slider
   sensSlider.addEventListener('input', ()=>{
     state.sens = parseFloat(sensSlider.value) || 1;
@@ -2430,9 +2498,9 @@ label:has(#engVolSlider) input[type="range"] {
 
 
 <style>
-/* Nudge sliders pill down by 24px */
+/* Nudge sliders pill up to avoid ios nav bar*/
 #hudControls {
-  bottom: -24px !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 95px) !important;
 }
 </style>
 
