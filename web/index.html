@@ -5277,4 +5277,43 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 })();</script>
 
+<script>
+/* =========================================================
+   iOS ENGINE LOUDNESS TRIM (END-OF-FILE SAFETY CLAMP)
+   ========================================================= */
+(function(){
+  const IS_IOS =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  if (!IS_IOS) return;
+
+  const TRIM = 0.50;   // tweak by ear (0.6–0.8)
+
+  function clampEngineVolume(){
+    try{
+      if (!window.engineOutGain || !window.audioCtx) return;
+
+      const g = engineOutGain.gain;
+      if (!g) return;
+
+      const slider = document.getElementById("engineVol");
+      const sliderVal = slider ? parseFloat(slider.value || "0.18") : 0.18;
+      const target = sliderVal * TRIM;
+
+      if (typeof g.setValueAtTime === "function")
+        g.setValueAtTime(target, audioCtx.currentTime);
+      else
+        g.value = target;
+
+    }catch(e){}
+  }
+
+  setInterval(clampEngineVolume, 1000);
+  document.addEventListener("visibilitychange", clampEngineVolume);
+  window.addEventListener("focus", clampEngineVolume);
+  window.addEventListener("pageshow", clampEngineVolume);
+})();
+</script>
+
 </body></html>
