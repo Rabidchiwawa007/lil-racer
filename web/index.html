@@ -1697,7 +1697,23 @@ function setPromptVisible(v){
 
   // ---------- Main Loop ----------
   function startGame(){
-    if(started){ running = true; setPromptVisible(false); statusBox.textContent = 'running'; ensureEngineAudio(); setEngineEnabled(state.soundOn); try{ setAudioRunning(true); }catch(e){} requestAnimationFrame(animate); return; }
+    if(started){
+      // If we're resuming from the start/pause overlay, restore any pause-frozen power-up timers
+      // and reset t0 to avoid a big dt jump.
+      const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if(!running){
+        try{ _restorePowerupTimers(nowMs); }catch(e){}
+        t0 = nowMs;
+      }
+      running = true;
+      setPromptVisible(false);
+      statusBox.textContent = 'running';
+      ensureEngineAudio();
+      setEngineEnabled(state.soundOn);
+      try{ setAudioRunning(true); }catch(e){}
+      requestAnimationFrame(animate);
+      return;
+    }
     started = true; running = true; setPromptVisible(false); statusBox.textContent = 'running'; t0 = performance.now(); ensureEngineAudio(); setEngineEnabled(state.soundOn); try{ setAudioRunning(true); }catch(e){}
     buildLegend(); positionLegend();
     updateCamera(); renderer.render(scene, camera);
@@ -4240,7 +4256,23 @@ window.forceEngineVol18Last = forceEngineVol18Last;
 
   // ---------- Main Loop ----------
   function startGame(){
-    if(started){ running = true; setPromptVisible(false); statusBox.textContent = 'running'; ensureEngineAudio(); setEngineEnabled(state.soundOn); try{ setAudioRunning(true); }catch(e){} requestAnimationFrame(animate); return; }
+    if(started){
+      // If we're resuming from the start/pause overlay, restore any pause-frozen power-up timers
+      // and reset t0 to avoid a big dt jump.
+      const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if(!running){
+        try{ _restorePowerupTimers(nowMs); }catch(e){}
+        t0 = nowMs;
+      }
+      running = true;
+      setPromptVisible(false);
+      statusBox.textContent = 'running';
+      ensureEngineAudio();
+      setEngineEnabled(state.soundOn);
+      try{ setAudioRunning(true); }catch(e){}
+      requestAnimationFrame(animate);
+      return;
+    }
     started = true; running = true; setPromptVisible(false); statusBox.textContent = 'running'; t0 = performance.now(); ensureEngineAudio(); setEngineEnabled(state.soundOn); try{ setAudioRunning(true); }catch(e){}
     buildLegend(); positionLegend();
     updateCamera(); renderer.render(scene, camera);
