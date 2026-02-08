@@ -5279,7 +5279,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 <script>
 /* =========================================================
-   iOS ENGINE LOUDNESS TRIM (END-OF-FILE SAFETY CLAMP)
+   iOS MASTER OUTPUT FIX (trim + gentle limiter)
+   Goal: reduce harshness/distortion on iPhone internal speaker
+   without reworking the game's audio system.
    ========================================================= */
 (function(){
   const IS_IOS =
@@ -5288,31 +5290,70 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!IS_IOS) return;
 
-  const TRIM = 0.50;   // tweak by ear (0.6–0.8)
+  // TUNE THESE:
+  const MASTER_TRIM = 0.52;   // overall level reduction (try 0.65–0.85)
+  const ENABLE_COMP = true;   // set false to test trim-only
 
-  function clampEngineVolume(){
+  let patched = false;
+
+  function tryPatch(){
     try{
-      if (!window.engineOutGain || !window.audioCtx) return;
+      if (patched) return;
 
-      const g = engineOutGain.gain;
-      if (!g) return;
+      // Your globals (must exist on window)
+      const ctx = window.audioCtx;
+      const master = window.masterOutGain;
 
-      const slider = document.getElementById("engineVol");
-      const sliderVal = slider ? parseFloat(slider.value || "0.18") : 0.18;
-      const target = sliderVal * TRIM;
+      if (!ctx || !master || !master.gain) return;
+      if (ctx.state === "closed") return;
 
-      if (typeof g.setValueAtTime === "function")
-        g.setValueAtTime(target, audioCtx.currentTime);
-      else
-        g.value = target;
+      // 1) Apply master trim (this alone often fixes "everything is too hot")
+      const t = ctx.currentTime || 0;
+      if (typeof master.gain.setValueAtTime === "function") {
+        master.gain.setValueAtTime(MASTER_TRIM, t);
+      } else {
+        master.gain.value = MASTER_TRIM;
+      }
 
-    }catch(e){}
+      if (ENABLE_COMP) {
+        // 2) Insert a gentle compressor/limiter between masterOutGain and destination
+        // This catches transients that make tiny speakers sound distorted.
+        const comp = ctx.createDynamicsCompressor();
+        comp.threshold.value = -18;  // lower = more limiting
+        comp.knee.value = 18;
+        comp.ratio.value = 4;
+        comp.attack.value = 0.003;
+        comp.release.value = 0.12;
+
+        // Rewire: masterOutGain -> comp -> destination
+        // Safe attempt: disconnect master from wherever it was, then reconnect.
+        try { master.disconnect(); } catch(e) {}
+
+        master.connect(comp);
+        comp.connect(ctx.destination);
+
+        // Keep references for debugging
+        window.__iosMasterComp = comp;
+      }
+
+      patched = true;
+      window.__iosMasterPatched = true;
+
+    }catch(e){
+      // ignore and keep trying
+    }
   }
 
-  setInterval(clampEngineVolume, 1000);
-  document.addEventListener("visibilitychange", clampEngineVolume);
-  window.addEventListener("focus", clampEngineVolume);
-  window.addEventListener("pageshow", clampEngineVolume);
+  // Try repeatedly because audioCtx/masterOutGain may be created after user gesture
+  const id = setInterval(() => {
+    if (patched) { clearInterval(id); return; }
+    tryPatch();
+  }, 250);
+
+  // Also retry on common resume paths
+  document.addEventListener("visibilitychange", tryPatch);
+  window.addEventListener("focus", tryPatch);
+  window.addEventListener("pageshow", tryPatch);
 })();
 </script>
 
