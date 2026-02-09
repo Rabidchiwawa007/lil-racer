@@ -51,6 +51,11 @@ label.pill:has(#engVolSlider) {
   display: none !important;
 }
 
+/* Hide sound toggle button */
+#toggleSound {
+  display: none !important;
+}
+
 #spaceTouchBtn{
   display:none;
 }
@@ -391,29 +396,54 @@ const BAD_LUCK_SEC = 25;
   }
 
   function ensureMasterBus(){
-  // Ensure a consistent audio state and buses
+    // Ensure a consistent audio state and buses
 
-    // Make sure AudioContext and master/sfx buses exist
+    // Make sure AudioContext exists
     if(!audioCtx){
-      try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ return; }
+      try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch(e){ return; }
     }
+
     try{
+      // Create master bus once
       if(!masterOutGain){
         masterOutGain = audioCtx.createGain();
-        masterOutGain.gain.value = (typeof state!=='undefined' && typeof state.masterVol==='number') ? state.masterVol : 1;
-      ensureMasterBus();
-        masterOutGain.connect(audioCtx.destination);
+        masterOutGain.gain.value =
+          (typeof state!=='undefined' && typeof state.masterVol==='number') ? state.masterVol : 1;
+
+        // iOS gentle limiter to reduce harshness on internal speaker
+        const IS_IOS =
+          /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+        if(IS_IOS){
+          masterComp = audioCtx.createDynamicsCompressor();
+          masterComp.threshold.value = -18;
+          masterComp.knee.value = 18;
+          masterComp.ratio.value = 4;
+          masterComp.attack.value = 0.003;
+          masterComp.release.value = 0.12;
+
+          masterOutGain.connect(masterComp);
+          masterComp.connect(audioCtx.destination);
+        } else {
+          masterOutGain.connect(audioCtx.destination);
+        }
       }
+
+      // Create SFX bus once
       if(!sfxOutGain){
         sfxOutGain = audioCtx.createGain();
         sfxOutGain.gain.value = 1.0;
         sfxOutGain.connect(masterOutGain);
       }
-      // If engineOutGain exists but isn't wired into master, wire it now
+
+      // Ensure engine bus routes into master (do NOT disconnect repeatedly unless needed)
       if(engineOutGain && masterOutGain){
-        try{ engineOutGain.disconnect(); }catch(e){}
+        // Only connect if not already; safest approach: try connect, ignore if already connected
         try{ engineOutGain.connect(masterOutGain); }catch(e){}
       }
+
     }catch(e){}
   }
 
@@ -2391,13 +2421,13 @@ canvas{ width:100%!important; height:100%!important; display:block; }
 #hudControls { gap: 6px; }
 #hudControls #toggleSound{
   width: 90% !important;
-  transform: scale(0.935);
+  transform: scale(.935);
   transform-origin: top center;
 }
 #hudControls label:has(#sensSlider),
 #hudControls label:has(#masterVolSlider){
   width: 90% !important;
-  transform: scale(0.935);
+  transform: scale(.935);
   transform-origin: top center;
 }
 #hudControls label:has(input[type="range"]) input[type="range"]{
@@ -2517,7 +2547,7 @@ label:has(#engVolSlider) input[type="range"] {
 <style>
 /* Re-center the controls pill while keeping 80% scale */
 #hudControls {
-  transform: translateX(-50%) scale(0.8) !important;
+  transform: translateX(-50%) scale(1.0) !important;
   transform-origin: top center !important;
 }
 </style>
@@ -2579,7 +2609,6 @@ label:has(#engVolSlider) input[type="range"] {
 </div>
 <div hidden="" id="bigPrompt">
 <div class="card">
-<p id="subText">Press Start, then use ◀ ▶. </p>
 <div style="display:flex; gap:8px; justify-content:center;">
 <button id="btnStart">Start</button>
 <button id="btnReset">Reset</button>
@@ -2798,6 +2827,7 @@ let masterVolVal = document.querySelector('#hudControls #masterVolVal');
   };
   // --- Audio globals (classic small gas engine) ---
   let audioCtx = null;
+  let masterComp = null;
   let engineFund = null;   // triangle fundamental
   let engineHarm = null;   // slight-detuned square for grit
   let engineGain = null;   // master gain
@@ -2985,32 +3015,56 @@ const BAD_LUCK_SEC = 25;
   }
 
   function ensureMasterBus(){
-  // Ensure a consistent audio state and buses
+    // Ensure a consistent audio state and buses
 
-    // Make sure AudioContext and master/sfx buses exist
+    // Make sure AudioContext exists
     if(!audioCtx){
-      try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ return; }
+      try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch(e){ return; }
     }
+
     try{
+      // Create master bus once
       if(!masterOutGain){
         masterOutGain = audioCtx.createGain();
-        masterOutGain.gain.value = (typeof state!=='undefined' && typeof state.masterVol==='number') ? state.masterVol : 1;
-      ensureMasterBus();
-        masterOutGain.connect(audioCtx.destination);
+        masterOutGain.gain.value =
+          (typeof state!=='undefined' && typeof state.masterVol==='number') ? state.masterVol : 1;
+
+        // iOS gentle limiter to reduce harshness on internal speaker
+        const IS_IOS =
+          /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+        if(IS_IOS){
+          masterComp = audioCtx.createDynamicsCompressor();
+          masterComp.threshold.value = -18;
+          masterComp.knee.value = 18;
+          masterComp.ratio.value = 4;
+          masterComp.attack.value = 0.003;
+          masterComp.release.value = 0.12;
+
+          masterOutGain.connect(masterComp);
+          masterComp.connect(audioCtx.destination);
+        } else {
+          masterOutGain.connect(audioCtx.destination);
+        }
       }
+
+      // Create SFX bus once
       if(!sfxOutGain){
         sfxOutGain = audioCtx.createGain();
         sfxOutGain.gain.value = 1.0;
         sfxOutGain.connect(masterOutGain);
       }
-      // If engineOutGain exists but isn't wired into master, wire it now
+
+      // Ensure engine bus routes into master (do NOT disconnect repeatedly unless needed)
       if(engineOutGain && masterOutGain){
-        try{ engineOutGain.disconnect(); }catch(e){}
+        // Only connect if not already; safest approach: try connect, ignore if already connected
         try{ engineOutGain.connect(masterOutGain); }catch(e){}
       }
+
     }catch(e){}
   }
-
   function setAudioRunning(isRunning){
   try{
     ensureMasterBus();
@@ -5275,86 +5329,27 @@ const pts = BLOCK_COLORS[b.colorKey]?.pts || 1;
 document.addEventListener("DOMContentLoaded", () => {
   window.forceEngineVol18("DOMContentLoaded");
   });
+
+/* Add title to #bigPrompt (no HTML edits needed) */
+document.addEventListener("DOMContentLoaded", () => {
+  const prompt = document.getElementById("bigPrompt");
+  if (!prompt) return;
+
+  const title = document.createElement("div");
+  title.textContent = "Lil' Racer";
+  title.style.position = "absolute";
+  title.style.top = "0px";
+  title.style.left = "50%";
+  title.style.transform = "translateX(-50%)";
+  title.style.fontSize = "30px";
+  title.style.fontWeight = "900";
+  title.style.letterSpacing = "12px";
+  title.style.color = "#ff4d4d";
+  title.style.textShadow = "0 0 10px #ff0000, 0 0 20px #ff0000, 0 4px 8px rgba(0,0,0,0.7)";
+  title.style.pointerEvents = "none";
+
+  prompt.appendChild(title);
+});
 })();</script>
-
-<script>
-/* =========================================================
-   iOS MASTER OUTPUT FIX (trim + gentle limiter)
-   Goal: reduce harshness/distortion on iPhone internal speaker
-   without reworking the game's audio system.
-   ========================================================= */
-(function(){
-  const IS_IOS =
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-
-  if (!IS_IOS) return;
-
-  // TUNE THESE:
-  const MASTER_TRIM = 0.52;   // overall level reduction (try 0.65–0.85)
-  const ENABLE_COMP = true;   // set false to test trim-only
-
-  let patched = false;
-
-  function tryPatch(){
-    try{
-      if (patched) return;
-
-      // Your globals (must exist on window)
-      const ctx = window.audioCtx;
-      const master = window.masterOutGain;
-
-      if (!ctx || !master || !master.gain) return;
-      if (ctx.state === "closed") return;
-
-      // 1) Apply master trim (this alone often fixes "everything is too hot")
-      const t = ctx.currentTime || 0;
-      if (typeof master.gain.setValueAtTime === "function") {
-        master.gain.setValueAtTime(MASTER_TRIM, t);
-      } else {
-        master.gain.value = MASTER_TRIM;
-      }
-
-      if (ENABLE_COMP) {
-        // 2) Insert a gentle compressor/limiter between masterOutGain and destination
-        // This catches transients that make tiny speakers sound distorted.
-        const comp = ctx.createDynamicsCompressor();
-        comp.threshold.value = -18;  // lower = more limiting
-        comp.knee.value = 18;
-        comp.ratio.value = 4;
-        comp.attack.value = 0.003;
-        comp.release.value = 0.12;
-
-        // Rewire: masterOutGain -> comp -> destination
-        // Safe attempt: disconnect master from wherever it was, then reconnect.
-        try { master.disconnect(); } catch(e) {}
-
-        master.connect(comp);
-        comp.connect(ctx.destination);
-
-        // Keep references for debugging
-        window.__iosMasterComp = comp;
-      }
-
-      patched = true;
-      window.__iosMasterPatched = true;
-
-    }catch(e){
-      // ignore and keep trying
-    }
-  }
-
-  // Try repeatedly because audioCtx/masterOutGain may be created after user gesture
-  const id = setInterval(() => {
-    if (patched) { clearInterval(id); return; }
-    tryPatch();
-  }, 250);
-
-  // Also retry on common resume paths
-  document.addEventListener("visibilitychange", tryPatch);
-  window.addEventListener("focus", tryPatch);
-  window.addEventListener("pageshow", tryPatch);
-})();
-</script>
 
 </body></html>
