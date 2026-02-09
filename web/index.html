@@ -20,7 +20,7 @@
     button:hover { transform: translateY(-1px); }
     button:active { transform: translateY(1px) scale(.98); }
     #bigPrompt { position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; }
-    #bigPrompt .card{ pointer-events:auto; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.1); color:#fff; padding: 18px 16px; border-radius: 16px; text-align:center; backdrop-filter: blur(8px); }
+    #bigPrompt .card{ pointer-events:auto; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.1); color:#fff; padding: 16px 16px; border-radius: 16px; text-align:center; backdrop-filter: blur(8px); }
     #bigPrompt h2{ margin:0 0 6px; font-size: clamp(18px,3.5vw,28px); }
     #bigPrompt p{ margin:0 0 12px; opacity:.9; font-size: clamp(14px,2.5vw,18px); }
     .small { font-size: 12px; opacity: .9; }
@@ -38,17 +38,9 @@
 /* Show engine volume slider/value */
 #engVolSlider, #engVolVal { display: inline-block !important; visibility: visible !important; opacity: 1 !important; }
 
-/* Hide Engine Volume control (we force it in code now) */
-#engVolSlider,
-#engVolVal {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-}
 
-/* Hide the entire "Eng Vol" pill container */
-label.pill:has(#engVolSlider) {
-  display: none !important;
+#spaceTouchBtn{
+  display:none;
 }
 
 /* Hide sound toggle button */
@@ -56,8 +48,32 @@ label.pill:has(#engVolSlider) {
   display: none !important;
 }
 
-#spaceTouchBtn{
-  display:none;
+/* ===== Glass pill title ===== */
+#titleCard{
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+
+  padding: 0px 8px;
+  border-radius: 10px;
+
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #ffffff;
+
+  background: rgba(0,0,0,.15);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(3px);
+
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow:
+    0 3px 6px rgba(0,0,0,0),
+    inset 0 0 10px rgba(255,255,255,0.0);
+
+  text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+  pointer-events: none;
 }
 
 
@@ -225,35 +241,35 @@ try{ if(engVolSlider) engVolSlider.style.display=''; if(engVolVal) engVolVal.sty
   // Timer / snapshots
   let elapsedSec = 0; // accumulates while running
 
-/* FORCE ENGINE VOL = 18% (put above BOTH Main Loop sections) */
+/* DEFAULT ENGINE VOL = 18% (only if no saved value yet) */
 function forceEngineVol18(tag="") {
-  const FORCE_VOL = 0.18;
-  const FORCE_PCT = "18";
+  const DEFAULT_VOL = 0.18;                 // 0..1
+  const DEFAULT_PCT = "18";                 // UI percent
   const KEY = "kid_racer_engine_vol";
 
+  // If a value already exists, do NOT override it.
+  try{
+    const saved = localStorage.getItem(KEY);
+    if (saved !== null && saved !== "") return;
+  }catch(e){}
+
   // state
-  try { if (typeof state !== "undefined") state.engineVol = FORCE_VOL; } catch(e){}
+  try { if (typeof state !== "undefined") state.engineVol = DEFAULT_VOL; } catch(e){}
 
   // UI
   try {
     const s = document.getElementById("engVolSlider");
-    if (s) s.value = FORCE_PCT;
+    if (s) s.value = DEFAULT_PCT;
     const v = document.getElementById("engVolVal");
-    if (v) v.textContent = FORCE_PCT + "%";
+    if (v) v.textContent = DEFAULT_PCT + "%";
   } catch(e){}
 
   // audio (common names in your file)
-  try { if (typeof engineOutGain !== "undefined" && engineOutGain?.gain) engineOutGain.gain.value = FORCE_VOL; } catch(e){}
-  try { if (typeof engineGain    !== "undefined" && engineGain?.gain)    engineGain.gain.value = FORCE_VOL; } catch(e){}
+  try { if (typeof engineOutGain !== "undefined" && engineOutGain?.gain) engineOutGain.gain.value = DEFAULT_VOL; } catch(e){}
+  try { if (typeof engineGain    !== "undefined" && engineGain?.gain)    engineGain.gain.value = DEFAULT_VOL; } catch(e){}
 
-  // nuke persistence so restores can’t win
-  try { localStorage.setItem(KEY, String(FORCE_VOL)); } catch(e){}
-}
-
-function forceEngineVol18Last(tag="") {
-  forceEngineVol18("now " + tag);
-  setTimeout(() => forceEngineVol18("timeout " + tag), 0);
-  requestAnimationFrame(() => forceEngineVol18("raf " + tag));
+  // Persist default so next launch restores it (and future calls won't override)
+  try { localStorage.setItem(KEY, String(DEFAULT_VOL)); } catch(e){}
 }
 
 window.forceEngineVol18 = forceEngineVol18;
@@ -467,10 +483,8 @@ function setEngineEnabled(on){
           p.then(() => forceEngineVol18Last("setEngineEnabled:on after resume"))
            .catch(() => forceEngineVol18Last("setEngineEnabled:on resume catch"));
         } else {
-          forceEngineVol18Last("setEngineEnabled:on after resume");
         }
       } catch (e) {
-        forceEngineVol18Last("setEngineEnabled:on resume throw");
       }
     }else{
       try{
@@ -1421,11 +1435,9 @@ btnReset.onclick = () => { reset(); setPromptVisible(true); statusBox.textConten
 
         // Create engine audio graph if not created yet
         try { ensureEngineAudio(); } catch(e) {}
-        try { forceEngineVol18Last("toggleSound: after ensureEngineAudio"); } catch(e) {}
 
         // Resume audio + start engine immediately
         try { setEngineEnabled(true); } catch(e) {}
-        try { forceEngineVol18Last("toggleSound: after setEngineEnabled(true)"); } catch(e) {}
 
         try { setAudioRunning(running); } catch(e) {}
       } else {
@@ -2421,13 +2433,13 @@ canvas{ width:100%!important; height:100%!important; display:block; }
 #hudControls { gap: 6px; }
 #hudControls #toggleSound{
   width: 90% !important;
-  transform: scale(.935);
+  transform: scale(0.935);
   transform-origin: top center;
 }
 #hudControls label:has(#sensSlider),
 #hudControls label:has(#masterVolSlider){
   width: 90% !important;
-  transform: scale(.935);
+  transform: scale(0.935);
   transform-origin: top center;
 }
 #hudControls label:has(input[type="range"]) input[type="range"]{
@@ -2572,7 +2584,7 @@ label:has(#engVolSlider) input[type="range"] {
 <style>
 /* Nudge sliders pill up to avoid ios nav bar*/
 #hudControls {
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 95px) !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 60px) !important;
 }
 </style>
 
@@ -2845,39 +2857,7 @@ let masterVolVal = document.querySelector('#hudControls #masterVolVal');
   let elapsedSec = 0; // accumulates while running
 
 
-/* FORCE ENGINE VOL = 18% (put above BOTH Main Loop sections) */
-function forceEngineVol18(tag="") {
-  const FORCE_VOL = 0.18;
-  const FORCE_PCT = "18";
-  const KEY = "kid_racer_engine_vol";
-
-  // state
-  try { if (typeof state !== "undefined") state.engineVol = FORCE_VOL; } catch(e){}
-
-  // UI
-  try {
-    const s = document.getElementById("engVolSlider");
-    if (s) s.value = FORCE_PCT;
-    const v = document.getElementById("engVolVal");
-    if (v) v.textContent = FORCE_PCT + "%";
-  } catch(e){}
-
-  // audio (common names in your file)
-  try { if (typeof engineOutGain !== "undefined" && engineOutGain?.gain) engineOutGain.gain.value = FORCE_VOL; } catch(e){}
-  try { if (typeof engineGain    !== "undefined" && engineGain?.gain)    engineGain.gain.value = FORCE_VOL; } catch(e){}
-
-  // nuke persistence so restores can’t win
-  try { localStorage.setItem(KEY, String(FORCE_VOL)); } catch(e){}
-}
-
-function forceEngineVol18Last(tag="") {
-  forceEngineVol18("now " + tag);
-  setTimeout(() => forceEngineVol18("timeout " + tag), 0);
-  requestAnimationFrame(() => forceEngineVol18("raf " + tag));
-}
-
 window.forceEngineVol18 = forceEngineVol18;
-window.forceEngineVol18Last = forceEngineVol18Last;
 
 // Bad-luck protection timestamps (seconds since run start)
 let lastGoldSec = -Infinity;
@@ -2954,7 +2934,6 @@ const BAD_LUCK_SEC = 25;
 
       engineGain = audioCtx.createGain();
       engineGain.gain.value = 0.18;
-      forceEngineVol18Last("after engineGain createGain");
 
       // Vibrato (pitch wobble)
       vibratoLFO = audioCtx.createOscillator();
@@ -3065,6 +3044,7 @@ const BAD_LUCK_SEC = 25;
 
     }catch(e){}
   }
+
   function setAudioRunning(isRunning){
   try{
     ensureMasterBus();
@@ -3082,13 +3062,9 @@ function setEngineEnabled(on){
       try {
         const p = audioCtx.resume();
         if (p && typeof p.then === "function") {
-          p.then(() => forceEngineVol18Last("setEngineEnabled:on after resume"))
-           .catch(() => forceEngineVol18Last("setEngineEnabled:on resume catch"));
         } else {
-          forceEngineVol18Last("setEngineEnabled:on after resume");
         }
       } catch (e) {
-        forceEngineVol18Last("setEngineEnabled:on resume throw");
       }
     }else{
       try{
@@ -4273,39 +4249,38 @@ function setPromptVisible(v){
   }
   reset();
 
-/* FORCE ENGINE VOL = 18% (put above BOTH Main Loop sections) */
+/* DEFAULT ENGINE VOL = 18% (only if no saved value yet) */
 function forceEngineVol18(tag="") {
-  const FORCE_VOL = 0.18;
-  const FORCE_PCT = "18";
+  const DEFAULT_VOL = 0.18;                 // 0..1
+  const DEFAULT_PCT = "18";                 // UI percent
   const KEY = "kid_racer_engine_vol";
 
+  // If a value already exists, do NOT override it.
+  try{
+    const saved = localStorage.getItem(KEY);
+    if (saved !== null && saved !== "") return;
+  }catch(e){}
+
   // state
-  try { if (typeof state !== "undefined") state.engineVol = FORCE_VOL; } catch(e){}
+  try { if (typeof state !== "undefined") state.engineVol = DEFAULT_VOL; } catch(e){}
 
   // UI
   try {
     const s = document.getElementById("engVolSlider");
-    if (s) s.value = FORCE_PCT;
+    if (s) s.value = DEFAULT_PCT;
     const v = document.getElementById("engVolVal");
-    if (v) v.textContent = FORCE_PCT + "%";
+    if (v) v.textContent = DEFAULT_PCT + "%";
   } catch(e){}
 
   // audio (common names in your file)
-  try { if (typeof engineOutGain !== "undefined" && engineOutGain?.gain) engineOutGain.gain.value = FORCE_VOL; } catch(e){}
-  try { if (typeof engineGain    !== "undefined" && engineGain?.gain)    engineGain.gain.value = FORCE_VOL; } catch(e){}
+  try { if (typeof engineOutGain !== "undefined" && engineOutGain?.gain) engineOutGain.gain.value = DEFAULT_VOL; } catch(e){}
+  try { if (typeof engineGain    !== "undefined" && engineGain?.gain)    engineGain.gain.value = DEFAULT_VOL; } catch(e){}
 
-  // nuke persistence so restores can’t win
-  try { localStorage.setItem(KEY, String(FORCE_VOL)); } catch(e){}
-}
-
-function forceEngineVol18Last(tag="") {
-  forceEngineVol18("now " + tag);
-  setTimeout(() => forceEngineVol18("timeout " + tag), 0);
-  requestAnimationFrame(() => forceEngineVol18("raf " + tag));
+  // Persist default so next launch restores it (and future calls won't override)
+  try { localStorage.setItem(KEY, String(DEFAULT_VOL)); } catch(e){}
 }
 
 window.forceEngineVol18 = forceEngineVol18;
-window.forceEngineVol18Last = forceEngineVol18Last;
 
 
   // ---------- Main Loop ----------
@@ -5336,6 +5311,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (!prompt) return;
 
   const title = document.createElement("div");
+  title.id = "titleCard";
   title.textContent = "Lil' Racer";
   title.style.position = "absolute";
   title.style.top = "0px";
